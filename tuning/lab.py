@@ -1,13 +1,16 @@
-"""The lab end to end: train the baseline, search hyperparameters with Hyperband, retrain the best and compare.
+"""The lab end to end: search hyperparameters with Hyperband, then compare the tuned model with the baseline fairly.
 
-    python -m tuning                      the full lab (about 8 minutes on a laptop CPU)
-    python -m tuning --max-epochs 2 --epochs 2    a quick check that everything runs (about 1 minute)
+    python -m tuning                      the full lab (about 10 minutes on a laptop CPU)
+    python -m tuning --quick              a quick check that everything runs (about 1 minute)
 
-Each run writes to its own folder, runs/<date-time>/: the tuner's trials, TensorBoard logs and results.json.
+Both models are trained the same way (until validation accuracy stops improving, keeping the best
+epoch) with several seeds, and compared on the test set only at the end. Each run writes to its own
+folder, runs/<date-time>/: the tuner's trials, TensorBoard logs and results.json.
 """
 
 import argparse
 import json
+import statistics
 import time
 from datetime import datetime
 from pathlib import Path
@@ -16,20 +19,30 @@ import keras
 import keras_tuner as kt
 import tensorflow as tf
 
-from tuning.data import load_fashion_mnist
+from tuning.data import load_fashion_mnist, split_validation
 from tuning.models import build_baseline, model_builder
 
-VALIDATION_SPLIT = 0.2
+# Two-sided 95% critical values of Student's t, by degrees of freedom, for the paired-difference interval
+T_95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228}
 
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(prog="python -m tuning", description=__doc__.splitlines()[0])
-    parser.add_argument("--seed", type=int, default=42, help="seed for weights, shuffling and the tuner (default 42)")
-    parser.add_argument("--epochs", type=int, default=10, help="epochs for the baseline and final models (default 10)")
+    parser.add_argument("--seed", type=int, default=42, help="seed for the search; final models use seed, seed+1, ... (default 42)")
     parser.add_argument("--max-epochs", type=int, default=10,
                         help="Hyperband's max_epochs: the most epochs any one trial trains for (default 10)")
+    parser.add_argument("--repeats", type=int, default=5, help="seeds each final model is trained with (default 5)")
+    parser.add_argument("--final-max-epochs", type=int, default=30,
+                        help="epoch limit for the final models, which stop early (default 30)")
+    parser.add_argument("--patience", type=int, default=3,
+                        help="epochs without a better validation accuracy before a final model stops (default 3)")
+    parser.add_argument("--quick", action="store_true",
+                        help="a fast check: --max-epochs 2 --repeats 2 --final-max-epochs 2")
     parser.add_argument("--runs-dir", default="runs", help="where run folders are created (default runs/)")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.quick:
+        args.max_epochs, args.repeats, args.final_max_epochs = 2, 2, 2
+    return args
 
 
 def make_reproducible(seed):
@@ -60,13 +73,48 @@ def check_search(tuner):
     return len(trials)
 
 
-def describe(model, layer_name, scores):
+def train_and_evaluate(build, seed, train, val, test, max_epochs, patience, log_dir):
+    """Train one model until validation accuracy stops improving, keep its best epoch, and score it on the test set."""
+    keras.backend.clear_session()  # start from a clean graph, so every seed builds the same model
+    keras.utils.set_random_seed(seed)
+    model = build()
+    stop = keras.callbacks.EarlyStopping(monitor="val_accuracy", patience=patience, restore_best_weights=True)
+    history = model.fit(*train, validation_data=val, epochs=max_epochs, verbose=0,
+                        callbacks=[stop, keras.callbacks.TensorBoard(str(log_dir))])
+    val_curve = history.history["val_accuracy"]
+    best_epoch = max(range(len(val_curve)), key=val_curve.__getitem__)
+    test_scores = model.evaluate(*test, return_dict=True, verbose=0)
     return {
-        "units": int(model.get_layer(layer_name).units),
-        "learning_rate": round(float(model.optimizer.learning_rate.numpy()), 6),
-        "test_accuracy": round(float(scores["accuracy"]), 4),
-        "test_loss": round(float(scores["loss"]), 4),
+        "seed": seed,
+        "epochs_trained": len(val_curve),
+        "best_epoch": best_epoch + 1,
+        "val_accuracy": round(val_curve[best_epoch], 4),
+        "test_accuracy": round(float(test_scores["accuracy"]), 4),
+        "test_loss": round(float(test_scores["loss"]), 4),
     }
+
+
+def summarize(runs):
+    accuracies = [r["test_accuracy"] for r in runs]
+    return {
+        "test_accuracy_mean": round(statistics.mean(accuracies), 4),
+        "test_accuracy_sd": round(statistics.stdev(accuracies), 4) if len(accuracies) > 1 else 0.0,
+        "val_accuracy_mean": round(statistics.mean(r["val_accuracy"] for r in runs), 4),
+        "best_epoch_mean": round(statistics.mean(r["best_epoch"] for r in runs), 1),
+        "runs": runs,
+    }
+
+
+def paired_difference(tuned_runs, baseline_runs):
+    """Tuned minus baseline test accuracy, seed by seed, with a 95% t interval for the mean difference."""
+    diffs = [t["test_accuracy"] - b["test_accuracy"] for t, b in zip(tuned_runs, baseline_runs)]
+    mean = statistics.mean(diffs)
+    result = {"mean": round(mean, 4), "per_seed": [round(d, 4) for d in diffs],
+              "tuned_better_in": sum(d > 0 for d in diffs), "seeds": len(diffs)}
+    if len(diffs) > 1:
+        half = T_95.get(len(diffs) - 1, 1.96) * statistics.stdev(diffs) / len(diffs) ** 0.5
+        result["ci95"] = [round(mean - half, 4), round(mean + half, 4)]
+    return result
 
 
 def main(argv=None):
@@ -77,13 +125,9 @@ def main(argv=None):
     board = run_dir / "tensorboard"
     print(f"Run folder: {run_dir}")
 
-    (x_train, y_train), (x_test, y_test) = load_fashion_mnist()
-
-    print("\n==> Baseline: 512 units, learning rate 0.001")
-    baseline = build_baseline()
-    baseline.fit(x_train, y_train, epochs=args.epochs, validation_split=VALIDATION_SPLIT, verbose=2,
-                 callbacks=[keras.callbacks.TensorBoard(str(board / "baseline"))])
-    baseline_result = describe(baseline, "dense_1", baseline.evaluate(x_test, y_test, return_dict=True, verbose=0))
+    (x_full, y_full), test = load_fashion_mnist()
+    train, val = split_validation(x_full, y_full)
+    print(f"{len(train[1])} training, {len(val[1])} validation and {len(test[1])} test images")
 
     print("\n==> Hyperband search over units and learning rate")
     tuner = kt.Hyperband(
@@ -100,7 +144,7 @@ def main(argv=None):
     )
     tuner.search_space_summary()
     started = time.time()
-    tuner.search(x_train, y_train, validation_split=VALIDATION_SPLIT, verbose=0,
+    tuner.search(*train, validation_data=val, verbose=0,
                  callbacks=[keras.callbacks.EarlyStopping(monitor="val_loss", patience=5),
                             keras.callbacks.TensorBoard(str(board / "search"))])
     search_seconds = round(time.time() - started)
@@ -110,26 +154,50 @@ def main(argv=None):
     print(f"{trials} trials in {search_seconds}s. Best: units={best_hps.get('units')}, "
           f"learning_rate={best_hps.get('learning_rate')}, val_accuracy={best_trial.score:.4f}")
 
-    print("\n==> Retrain the best hyperparameters")
-    tuned = tuner.hypermodel.build(best_hps)
-    tuned.fit(x_train, y_train, epochs=args.epochs, validation_split=VALIDATION_SPLIT, verbose=2,
-              callbacks=[keras.callbacks.TensorBoard(str(board / "tuned"))])
-    tuned_result = describe(tuned, "tuned_dense_1", tuned.evaluate(x_test, y_test, return_dict=True, verbose=0))
-
-    results = {
-        "seed": args.seed,
-        "epochs": args.epochs,
-        "max_epochs": args.max_epochs,
-        "search": {"trials": trials, "seconds": search_seconds, "best_val_accuracy": round(float(best_trial.score), 4)},
-        "baseline": baseline_result,
-        "tuned": tuned_result,
+    seeds = [args.seed + i for i in range(args.repeats)]
+    models = {
+        "baseline": build_baseline,
+        "tuned": lambda: tuner.hypermodel.build(best_hps),
     }
-    (run_dir / "results.json").write_text(json.dumps(results, indent=2))
+    results = {}
+    for name, build in models.items():
+        print(f"\n==> Train the {name} model with seeds {seeds}")
+        runs = []
+        for seed in seeds:
+            run = train_and_evaluate(build, seed, train, val, test, args.final_max_epochs, args.patience,
+                                     board / "final" / f"{name}-seed{seed}")
+            print(f"  seed {seed}: best epoch {run['best_epoch']:>2} of {run['epochs_trained']:>2}, "
+                  f"val_accuracy {run['val_accuracy']:.4f}, test_accuracy {run['test_accuracy']:.4f}")
+            runs.append(run)
+        results[name] = summarize(runs)
 
-    print("\n==> Results on the test set")
-    for name, result in [("Baseline", baseline_result), ("Tuned", tuned_result)]:
-        print(f"{name:9} units={result['units']:<4} learning_rate={result['learning_rate']:<7} "
-              f"test_accuracy={result['test_accuracy']:.4f} test_loss={result['test_loss']:.4f}")
+    difference = paired_difference(results["tuned"]["runs"], results["baseline"]["runs"])
+    output = {
+        "seed": args.seed,
+        "max_epochs": args.max_epochs,
+        "split": {"train": len(train[1]), "validation": len(val[1]), "test": len(test[1])},
+        "search": {"trials": trials, "seconds": search_seconds, "best_val_accuracy": round(float(best_trial.score), 4),
+                   "best_hyperparameters": {"units": best_hps.get("units"), "learning_rate": best_hps.get("learning_rate")}},
+        "baseline": {"units": 512, "learning_rate": 0.001, **results["baseline"]},
+        "tuned": {**output_hps(best_hps), **results["tuned"]},
+        "tuned_minus_baseline": difference,
+    }
+    (run_dir / "results.json").write_text(json.dumps(output, indent=2))
+
+    print(f"\n==> Results on the test set ({len(seeds)} seeds each)")
+    for name in models:
+        r, hps = results[name], output[name]
+        print(f"{name.capitalize():9} units={hps['units']:<4} learning_rate={hps['learning_rate']:<7} "
+              f"test_accuracy={r['test_accuracy_mean']:.4f} ± {r['test_accuracy_sd']:.4f}  "
+              f"(best epoch {r['best_epoch_mean']:g} on average)")
+    ci = difference.get("ci95")
+    print(f"Tuned - baseline: {difference['mean']:+.4f}"
+          + (f", 95% interval [{ci[0]:+.4f}, {ci[1]:+.4f}]" if ci else "")
+          + f"; tuned better with {difference['tuned_better_in']} of {difference['seeds']} seeds")
     print(f"\nSaved {run_dir / 'results.json'}")
     print(f"View the training curves: tensorboard --logdir {board}")
-    return results
+    return output
+
+
+def output_hps(hps):
+    return {"units": hps.get("units"), "learning_rate": hps.get("learning_rate")}

@@ -7,10 +7,10 @@ def build_baseline():
     """The lab's hand-picked model: one hidden layer of 512 units and a learning rate of 0.001."""
     model = keras.Sequential([
         keras.Input(shape=(28, 28)),
-        keras.layers.Flatten(),
-        keras.layers.Dense(512, activation="relu", name="dense_1"),
-        keras.layers.Dropout(0.2),
-        keras.layers.Dense(10, activation="softmax"),
+        keras.layers.Flatten(name="flatten"),
+        keras.layers.Dense(512, activation="relu", name="hidden"),
+        keras.layers.Dropout(0.2, name="dropout"),
+        keras.layers.Dense(10, activation="softmax", name="output"),
     ])
     model.compile(optimizer=keras.optimizers.Adam(learning_rate=1e-3),
                   loss=keras.losses.SparseCategoricalCrossentropy(), metrics=["accuracy"])
@@ -23,10 +23,10 @@ def model_builder(hp):
     learning_rate = hp.Choice("learning_rate", values=[1e-2, 1e-3, 1e-4])
     model = keras.Sequential([
         keras.Input(shape=(28, 28)),
-        keras.layers.Flatten(),
-        keras.layers.Dense(units, activation="relu", name="tuned_dense_1"),
-        keras.layers.Dropout(0.2),
-        keras.layers.Dense(10, activation="softmax"),
+        keras.layers.Flatten(name="flatten"),
+        keras.layers.Dense(units, activation="relu", name="hidden"),
+        keras.layers.Dropout(0.2, name="dropout"),
+        keras.layers.Dense(10, activation="softmax", name="output"),
     ])
     model.compile(optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
                   loss=keras.losses.SparseCategoricalCrossentropy(), metrics=["accuracy"])
