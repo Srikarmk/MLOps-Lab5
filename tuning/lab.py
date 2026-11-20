@@ -1,4 +1,5 @@
-"""The lab end to end: search hyperparameters with Hyperband, then compare the tuned model with the baseline fairly.
+"""The lab end to end: search the network's shape and training settings with Hyperband, then compare the tuned
+model with the baseline fairly.
 
     python -m tuning                      the full lab (about 10 minutes on a laptop CPU)
     python -m tuning --quick              a quick check that everything runs (about 1 minute)
@@ -20,9 +21,11 @@ import keras_tuner as kt
 import tensorflow as tf
 
 from tuning.data import load_fashion_mnist, split_validation
-from tuning.models import build_baseline, model_builder
+from tuning.models import BASELINE_BATCH_SIZE, FashionHyperModel, build_baseline, describe
 
 # Two-sided 95% critical values of Student's t, by degrees of freedom, for the paired-difference interval
+BASELINE = {"layers": 1, "learning_rate": 0.001, "batch_size": BASELINE_BATCH_SIZE, "units_1": 512, "dropout_1": 0.2}
+
 T_95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228}
 
 
@@ -73,13 +76,13 @@ def check_search(tuner):
     return len(trials)
 
 
-def train_and_evaluate(build, seed, train, val, test, max_epochs, patience, log_dir):
+def train_and_evaluate(build, batch_size, seed, train, val, test, max_epochs, patience, log_dir):
     """Train one model until validation accuracy stops improving, keep its best epoch, and score it on the test set."""
     keras.backend.clear_session()  # start from a clean graph, so every seed builds the same model
     keras.utils.set_random_seed(seed)
     model = build()
     stop = keras.callbacks.EarlyStopping(monitor="val_accuracy", patience=patience, restore_best_weights=True)
-    history = model.fit(*train, validation_data=val, epochs=max_epochs, verbose=0,
+    history = model.fit(*train, validation_data=val, epochs=max_epochs, batch_size=batch_size, verbose=0,
                         callbacks=[stop, keras.callbacks.TensorBoard(str(log_dir))])
     val_curve = history.history["val_accuracy"]
     best_epoch = max(range(len(val_curve)), key=val_curve.__getitem__)
@@ -129,9 +132,9 @@ def main(argv=None):
     train, val = split_validation(x_full, y_full)
     print(f"{len(train[1])} training, {len(val[1])} validation and {len(test[1])} test images")
 
-    print("\n==> Hyperband search over units and learning rate")
+    print("\n==> Hyperband search over depth, units, dropout, learning rate and batch size")
     tuner = kt.Hyperband(
-        model_builder,
+        FashionHyperModel(),
         objective="val_accuracy",
         max_epochs=args.max_epochs,
         factor=3,
@@ -151,20 +154,20 @@ def main(argv=None):
     trials = check_search(tuner)
     best_hps = tuner.get_best_hyperparameters()[0]
     best_trial = tuner.oracle.get_best_trials()[0]
-    print(f"{trials} trials in {search_seconds}s. Best: units={best_hps.get('units')}, "
-          f"learning_rate={best_hps.get('learning_rate')}, val_accuracy={best_trial.score:.4f}")
+    print(f"{trials} trials in {search_seconds}s. Best (val_accuracy {best_trial.score:.4f}): {format_hps(describe(best_hps))}")
 
     seeds = [args.seed + i for i in range(args.repeats)]
+    hyperparameters = {"baseline": BASELINE, "tuned": describe(best_hps)}
     models = {
-        "baseline": build_baseline,
-        "tuned": lambda: tuner.hypermodel.build(best_hps),
+        "baseline": (build_baseline, BASELINE_BATCH_SIZE),
+        "tuned": (lambda: tuner.hypermodel.build(best_hps), best_hps.get("batch_size")),
     }
     results = {}
-    for name, build in models.items():
+    for name, (build, batch_size) in models.items():
         print(f"\n==> Train the {name} model with seeds {seeds}")
         runs = []
         for seed in seeds:
-            run = train_and_evaluate(build, seed, train, val, test, args.final_max_epochs, args.patience,
+            run = train_and_evaluate(build, batch_size, seed, train, val, test, args.final_max_epochs, args.patience,
                                      board / "final" / f"{name}-seed{seed}")
             print(f"  seed {seed}: best epoch {run['best_epoch']:>2} of {run['epochs_trained']:>2}, "
                   f"val_accuracy {run['val_accuracy']:.4f}, test_accuracy {run['test_accuracy']:.4f}")
@@ -176,20 +179,18 @@ def main(argv=None):
         "seed": args.seed,
         "max_epochs": args.max_epochs,
         "split": {"train": len(train[1]), "validation": len(val[1]), "test": len(test[1])},
-        "search": {"trials": trials, "seconds": search_seconds, "best_val_accuracy": round(float(best_trial.score), 4),
-                   "best_hyperparameters": {"units": best_hps.get("units"), "learning_rate": best_hps.get("learning_rate")}},
-        "baseline": {"units": 512, "learning_rate": 0.001, **results["baseline"]},
-        "tuned": {**output_hps(best_hps), **results["tuned"]},
+        "search": {"trials": trials, "seconds": search_seconds, "best_val_accuracy": round(float(best_trial.score), 4)},
+        "baseline": {"hyperparameters": hyperparameters["baseline"], **results["baseline"]},
+        "tuned": {"hyperparameters": hyperparameters["tuned"], **results["tuned"]},
         "tuned_minus_baseline": difference,
     }
     (run_dir / "results.json").write_text(json.dumps(output, indent=2))
 
     print(f"\n==> Results on the test set ({len(seeds)} seeds each)")
     for name in models:
-        r, hps = results[name], output[name]
-        print(f"{name.capitalize():9} units={hps['units']:<4} learning_rate={hps['learning_rate']:<7} "
-              f"test_accuracy={r['test_accuracy_mean']:.4f} ± {r['test_accuracy_sd']:.4f}  "
-              f"(best epoch {r['best_epoch_mean']:g} on average)")
+        r = results[name]
+        print(f"{name.capitalize():9} test_accuracy={r['test_accuracy_mean']:.4f} ± {r['test_accuracy_sd']:.4f}  "
+              f"(best epoch {r['best_epoch_mean']:g} on average)  {format_hps(hyperparameters[name])}")
     ci = difference.get("ci95")
     print(f"Tuned - baseline: {difference['mean']:+.4f}"
           + (f", 95% interval [{ci[0]:+.4f}, {ci[1]:+.4f}]" if ci else "")
@@ -199,5 +200,5 @@ def main(argv=None):
     return output
 
 
-def output_hps(hps):
-    return {"units": hps.get("units"), "learning_rate": hps.get("learning_rate")}
+def format_hps(hps):
+    return ", ".join(f"{k}={v}" for k, v in hps.items())
