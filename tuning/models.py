@@ -32,9 +32,18 @@ class FashionHyperModel(kt.HyperModel):
       (a conditional hyperparameter), so the tuner never records values for a layer that isn't there.
     - learning_rate: anywhere from 0.0001 to 0.01, sampled on a log scale so each power of ten is equally likely.
     - batch_size: tuned in fit(), because it is a setting of training rather than of the model.
+
+    Every trial starts from the same random state (`seed`), so a trial's result depends only on its
+    hyperparameters. Without this, the weights a trial starts from depend on what ran before it in the
+    process, and background threads (such as the TensorBoard callback's) made repeated searches differ.
     """
 
+    def __init__(self, seed=42, **kwargs):
+        super().__init__(**kwargs)
+        self.seed = seed
+
     def build(self, hp):
+        keras.utils.set_random_seed(self.seed)
         n_layers = hp.Int("layers", min_value=1, max_value=MAX_LAYERS)
         layers = []
         for i in range(1, MAX_LAYERS + 1):

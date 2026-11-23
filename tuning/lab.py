@@ -77,10 +77,13 @@ def check_search(tuner):
 
 
 def train_and_evaluate(build, batch_size, seed, train, val, test, max_epochs, patience, log_dir):
-    """Train one model until validation accuracy stops improving, keep its best epoch, and score it on the test set."""
+    """Train one model until validation accuracy stops improving, keep its best epoch, and score it on the test set.
+
+    `build(seed)` returns a new compiled model whose random initial weights come from `seed`.
+    """
     keras.backend.clear_session()  # start from a clean graph, so every seed builds the same model
     keras.utils.set_random_seed(seed)
-    model = build()
+    model = build(seed)
     stop = keras.callbacks.EarlyStopping(monitor="val_accuracy", patience=patience, restore_best_weights=True)
     history = model.fit(*train, validation_data=val, epochs=max_epochs, batch_size=batch_size, verbose=0,
                         callbacks=[stop, keras.callbacks.TensorBoard(str(log_dir))])
@@ -134,7 +137,7 @@ def main(argv=None):
 
     print("\n==> Hyperband search over depth, units, dropout, learning rate and batch size")
     tuner = kt.Hyperband(
-        FashionHyperModel(),
+        FashionHyperModel(seed=args.seed),
         objective="val_accuracy",
         max_epochs=args.max_epochs,
         factor=3,
@@ -159,8 +162,8 @@ def main(argv=None):
     seeds = [args.seed + i for i in range(args.repeats)]
     hyperparameters = {"baseline": BASELINE, "tuned": describe(best_hps)}
     models = {
-        "baseline": (build_baseline, BASELINE_BATCH_SIZE),
-        "tuned": (lambda: tuner.hypermodel.build(best_hps), best_hps.get("batch_size")),
+        "baseline": (lambda seed: build_baseline(), BASELINE_BATCH_SIZE),
+        "tuned": (lambda seed: FashionHyperModel(seed=seed).build(best_hps), best_hps.get("batch_size")),
     }
     results = {}
     for name, (build, batch_size) in models.items():

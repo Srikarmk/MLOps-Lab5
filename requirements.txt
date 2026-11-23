@@ -4,3 +4,8 @@ keras==3.15.1
 keras-tuner==1.4.8
 # TensorFlow 2.21 no longer installs TensorBoard, but Keras's TensorBoard callback needs it
 tensorboard==2.21.0
+# For the search-strategy comparison (python -m tuning.compare): Keras Tuner's BayesianOptimization
+# needs SciPy and scikit-learn (its optional "bayesian" extra), and matplotlib draws the plot
+scipy==1.18.1
+scikit-learn==1.9.1
+matplotlib==3.11.2
