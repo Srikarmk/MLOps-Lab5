@@ -2,7 +2,26 @@
 
 This lab tunes a Fashion MNIST image classifier with [Keras Tuner](https://keras.io/keras_tuner/). It searches the network's depth, width, dropout, learning rate and batch size with **Hyperband**, re-checks the search's top configurations with fresh seeds before choosing one, then compares the tuned model with the lab's hand-picked baseline fairly: both trained the same way, with several seeds, on the test set only at the end. A second command compares Keras Tuner's three search strategies (Hyperband, random search and Bayesian optimization) at the same budget of training epochs.
 
-It is based on the course's hyperparameter tuning lab (`Labs/Model_Development/Hyper_Parameters_Tuning/Keras_Tuner.ipynb`), kept unchanged in [original/Keras_Tuner.ipynb](original/Keras_Tuner.ipynb). This version is a work in progress; the sections below describe it as it stands.
+It covers:
+- a Keras Tuner **`HyperModel`** with **conditional hyperparameters** (each layer's settings exist only when the layer does), a **log-scale** learning rate, and the **batch size** tuned in `fit()`
+- **Hyperband**, **random search** and **Bayesian optimization**, compared at the same budget of training epochs
+- the **winner's curse**: the search's best score is optimistic, so its top configurations are re-checked with fresh seeds before one is chosen
+- a fair comparison with the baseline (same training, 5 seeds, a paired 95% interval) and a search that is **reproducible** and **fails loudly**
+- **tests** and a one-command run
+
+It is based on the course's hyperparameter tuning lab (`Labs/Model_Development/Hyper_Parameters_Tuning/Keras_Tuner.ipynb`), kept unchanged in [original/Keras_Tuner.ipynb](original/Keras_Tuner.ipynb). With current packages that notebook doesn't work: every training run crashes, yet it still reports a "tuned" model far better than the baseline. [What changed](#what-changed-from-the-original-lab) lists every change and why.
+
+## Contents
+
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [Run the whole lab in one command](#run-the-whole-lab-in-one-command)
+- [Run the steps yourself](#run-the-steps-yourself)
+- [Compare search strategies](#compare-search-strategies)
+- [Results and findings](#results-and-findings)
+- [What changed from the original lab](#what-changed-from-the-original-lab)
+- [Project layout](#project-layout)
+- [Troubleshooting](#troubleshooting)
 
 ## Prerequisites
 
@@ -10,8 +29,17 @@ It is based on the course's hyperparameter tuning lab (`Labs/Model_Development/H
 |---|---|---|
 | Python | 3.12 (TensorFlow 2.21 supports 3.10 to 3.13, not 3.14) | macOS: `brew install python@3.12`; Ubuntu: `sudo apt install python3.12 python3.12-venv`; Windows: [python.org](https://www.python.org/downloads/) |
 | Git | any | macOS: `xcode-select --install`; Ubuntu: `sudo apt install git`; Windows: `winget install Git.Git` |
+| bash | any, for `run_lab.sh` | built into macOS and Linux. On Windows, use WSL 2 or Git Bash, or run the steps yourself |
 
-Packages, installed by the setup below from `requirements.txt`:
+Check Python:
+
+```bash
+python3.12 --version
+```
+
+This should print `Python 3.12.x`. Python 3.10, 3.11 or 3.13 also work; 3.14 does not, because TensorFlow 2.21 has no packages for it.
+
+Packages, installed from `requirements.txt` by the setup below (or by `run_lab.sh`):
 
 | Package | Version | Used for |
 |---|---|---|
@@ -21,10 +49,13 @@ Packages, installed by the setup below from `requirements.txt`:
 | tensorboard | 2.21.0 | training curves. TensorFlow 2.21 no longer installs it, and Keras's TensorBoard callback fails without it |
 | scipy / scikit-learn | 1.18.1 / 1.9.1 | Keras Tuner's `BayesianOptimization` (its optional `bayesian` extra), used by the strategy comparison |
 | matplotlib | 3.11.2 | the strategy comparison's plot |
+| pytest | 9.1.1 | the tests in `tests/` |
 
-Training runs on the CPU; no GPU is needed. You need about 1.5 GB of disk for the packages, plus 100 MB per run.
+Training runs on the CPU; no GPU is needed. You need about 1.7 GB of disk for the packages, plus about 130 MB per lab run and 600 MB per full strategy comparison (the tuner keeps every trial's weights).
 
 ## Setup
+
+`run_lab.sh` (next section) does all of this for you. To set up by hand:
 
 ```bash
 git clone https://github.com/Srikarmk/MLOps-Lab5.git
@@ -35,7 +66,9 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-The install downloads about 280 MB, 220 MB of it TensorFlow, and took 11 minutes here. Check it:
+`requirements.txt` pins every package's version.
+
+The install downloads about 300 MB, 220 MB of it TensorFlow, and took 11 minutes here. Check it:
 
 ```bash
 python -c "import tensorflow as tf, keras, keras_tuner as kt; print(tf.__version__, keras.__version__, kt.__version__)"
@@ -43,7 +76,28 @@ python -c "import tensorflow as tf, keras, keras_tuner as kt; print(tf.__version
 
 This should print `2.21.0 3.15.1 1.4.8`.
 
-## Run
+## Run the whole lab in one command
+
+```bash
+git clone https://github.com/Srikarmk/MLOps-Lab5.git
+cd MLOps-Lab5
+./run_lab.sh
+```
+
+`run_lab.sh` runs four stages and stops at the first failure:
+1. **Python:** finds Python 3.10–3.13 (preferring 3.12) and creates `.venv`, unless it already exists. To pick one, set `PYTHON=/path/to/python3.12`.
+2. **Packages:** installs the pinned packages from `requirements.txt`. The first time takes about 10 minutes.
+3. **Tests:** runs the 16 tests in `tests/`, about 15 seconds.
+4. **The lab:** runs `python -m tuning`, about 10 minutes.
+
+Options:
+- `./run_lab.sh --quick` runs a short version of everything in about 1 minute after the install.
+- `./run_lab.sh --compare` also runs the strategy comparison, about 35 more minutes.
+- The two combine: `./run_lab.sh --quick --compare` takes about 1 minute after the install.
+
+## Run the steps yourself
+
+With the virtual environment active (`source .venv/bin/activate`):
 
 ```bash
 python -m tuning
@@ -90,7 +144,21 @@ View the training curves: tensorboard --logdir runs/<date-time>/tensorboard
 
 Every run is seeded (`--seed`, default 42) and TensorFlow's ops are made deterministic, so the same seed gives exactly these numbers on the same setup. Every search trial also starts from the same random state, so a trial's score depends only on its hyperparameters. Each run writes to its own folder, `runs/<date-time>/`: the tuner's trials, TensorBoard logs and `results.json`. `python -m tuning --help` lists the options (seed, number of seeds, epoch limits).
 
-TensorFlow prints a line starting `E0000 ... NodeDef mentions attribute use_unbounded_threadpool` after training. It is a harmless message from TensorFlow itself.
+Look at the training curves of the baseline, every search trial and the final models in TensorBoard, then open http://localhost:6006:
+
+```bash
+tensorboard --logdir runs/<date-time>/tensorboard
+```
+
+Run the tests on their own:
+
+```bash
+python -m pytest -v
+```
+
+They check the validation split, the search space (conditional layers, log-scale learning rate, batch size, per-trial seeding), the safeguards (a failed trial or a missing TensorBoard stops the run), the re-check's choice of candidates, the paired interval, and that the strategy comparison gives every strategy the same budget. Two of them run the lab and the comparison end to end on a 2,000-image slice of the data.
+
+TensorFlow prints a line starting `E0000 ... NodeDef mentions attribute use_unbounded_threadpool` after training. It is a harmless message from TensorFlow itself; `run_lab.sh` sets `TF_CPP_MIN_LOG_LEVEL=2` to hide TensorFlow's other informational lines.
 
 ## Compare search strategies
 
@@ -176,3 +244,36 @@ How the lab's result changed through the steps (the baseline is the same in ever
 | Only Hyperband, with no way to tell whether another strategy would do better | `python -m tuning.compare`: Hyperband, random search and Bayesian optimization at the same budget of training epochs, over 3 independent search seeds, with every chosen configuration retrained over 3 seeds |
 | The tuned model is the search's single best trial | The search's top 5 configurations are re-checked with 3 fresh seeds under the search's conditions, and the best re-checked mean is chosen. `results.json` records every candidate's search score and re-checked scores |
 | Search trials start from whatever random state the previous one left. With the TensorBoard callback, a repeated search sometimes scored trials differently | Each trial reseeds before building its model, so repeated searches match exactly and a configuration gets the same score whichever strategy tries it |
+| No tests | 16 pytest tests, including end-to-end runs of the lab and the comparison on a slice of the data |
+| Manual cell-by-cell steps | `run_lab.sh`: Python check, pinned install, tests and the lab in one command |
+
+## Project layout
+
+```text
+MLOps-Lab5/
+├── run_lab.sh                  the whole lab in one command
+├── requirements.txt            pinned packages
+├── pytest.ini                  test settings
+├── tuning/
+│   ├── data.py                 Fashion MNIST and the fixed, stratified validation split
+│   ├── models.py               the baseline and FashionHyperModel, the search space
+│   ├── lab.py                  python -m tuning: search, re-check the top 5, fair comparison with the baseline
+│   └── compare.py              python -m tuning.compare: the three search strategies at the same epoch budget
+├── tests/                      pytest tests
+├── results/                    the full strategy comparison's results and plot
+├── original/Keras_Tuner.ipynb  the course's original notebook (unchanged)
+└── runs/                       created by each run: trials, TensorBoard logs, results.json (git-ignored)
+```
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `Python 3.10 to 3.13 is needed` from `run_lab.sh`, or `No matching distribution found for tensorflow==2.21.0` | Your Python is too new (3.14) or too old. Install Python 3.12 (see [Prerequisites](#prerequisites)), delete `.venv`, and run again, or point at it: `PYTHON=/path/to/python3.12 ./run_lab.sh` |
+| `TensorBoard is not installed` | The packages were installed without `requirements.txt`. Run `pip install -r requirements.txt` |
+| `Please install scipy before using the BayesianOptimization` | Same cause: run `pip install -r requirements.txt` |
+| `The search did not finish cleanly (N of M trials failed)` | A trial crashed, and the lab stopped rather than report a result from an incomplete search. The message shows the first errors, and `runs/<date-time>/hyperband/trial_*/` has each trial's details |
+| The run takes much longer than the times above | Training runs on the CPU and shares it with everything else; a busy browser tab can double the time. Close heavy programs, or use `--quick` to check that everything works |
+| A long run stops when the laptop sleeps | Keep the machine awake: on macOS, prefix the command with `caffeinate -i` |
+| `./run_lab.sh: Permission denied` | `chmod +x run_lab.sh`, or run `bash run_lab.sh` |
+| Downloading Fashion MNIST fails | The first run downloads it from Google's storage. Check your internet connection; later runs use the copy in `~/.keras/datasets/` |

@@ -5,3 +5,6 @@ __pycache__/
 
 # Created by every run: tuner trials, TensorBoard logs, results
 runs/
+
+# pytest
+.pytest_cache/
