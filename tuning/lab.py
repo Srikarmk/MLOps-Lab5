@@ -4,8 +4,10 @@ model with the baseline fairly.
     python -m tuning                      the full lab (about 10 minutes on a laptop CPU)
     python -m tuning --quick              a quick check that everything runs (about 1 minute)
 
-Both models are trained the same way (until validation accuracy stops improving, keeping the best
-epoch) with several seeds, and compared on the test set only at the end. Each run writes to its own
+The search's top configurations are re-checked with fresh seeds before one is chosen, because the
+search's best score is the luckiest of many single runs. The chosen model and the baseline are then
+trained the same way (until validation accuracy stops improving, keeping the best epoch) with several
+seeds, and compared on the test set only at the end. Each run writes to its own
 folder, runs/<date-time>/: the tuner's trials, TensorBoard logs and results.json.
 """
 
@@ -23,9 +25,10 @@ import tensorflow as tf
 from tuning.data import load_fashion_mnist, split_validation
 from tuning.models import BASELINE_BATCH_SIZE, FashionHyperModel, build_baseline, describe
 
-# Two-sided 95% critical values of Student's t, by degrees of freedom, for the paired-difference interval
 BASELINE = {"layers": 1, "learning_rate": 0.001, "batch_size": BASELINE_BATCH_SIZE, "units_1": 512, "dropout_1": 0.2}
+RECHECK_SEED_OFFSET = 100  # re-check seeds are seed+100, seed+101, ...: different from the search's and the final models'
 
+# Two-sided 95% critical values of Student's t, by degrees of freedom, for the paired-difference interval
 T_95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228}
 
 
@@ -34,17 +37,21 @@ def parse_args(argv=None):
     parser.add_argument("--seed", type=int, default=42, help="seed for the search; final models use seed, seed+1, ... (default 42)")
     parser.add_argument("--max-epochs", type=int, default=10,
                         help="Hyperband's max_epochs: the most epochs any one trial trains for (default 10)")
+    parser.add_argument("--top-k", type=int, default=5,
+                        help="the search's best configurations to re-check before choosing one (default 5)")
+    parser.add_argument("--recheck-seeds", type=int, default=3,
+                        help="fresh seeds each of those is retrained with, under the search's conditions (default 3)")
     parser.add_argument("--repeats", type=int, default=5, help="seeds each final model is trained with (default 5)")
     parser.add_argument("--final-max-epochs", type=int, default=30,
                         help="epoch limit for the final models, which stop early (default 30)")
     parser.add_argument("--patience", type=int, default=3,
                         help="epochs without a better validation accuracy before a final model stops (default 3)")
     parser.add_argument("--quick", action="store_true",
-                        help="a fast check: --max-epochs 2 --repeats 2 --final-max-epochs 2")
+                        help="a fast check: --max-epochs 2 --top-k 2 --recheck-seeds 2 --repeats 2 --final-max-epochs 2")
     parser.add_argument("--runs-dir", default="runs", help="where run folders are created (default runs/)")
     args = parser.parse_args(argv)
     if args.quick:
-        args.max_epochs, args.repeats, args.final_max_epochs = 2, 2, 2
+        args.max_epochs, args.top_k, args.recheck_seeds, args.repeats, args.final_max_epochs = 2, 2, 2, 2, 2
     return args
 
 
@@ -98,6 +105,37 @@ def train_and_evaluate(build, batch_size, seed, train, val, test, max_epochs, pa
         "test_accuracy": round(float(test_scores["accuracy"]), 4),
         "test_loss": round(float(test_scores["loss"]), 4),
     }
+
+
+def top_configurations(tuner, k, max_epochs):
+    """The k best distinct configurations among trials that trained for the full max_epochs.
+
+    Hyperband judges most trials after a few epochs; only its full-length trials compare like for like
+    with each other and with a full-length re-check. A configuration can appear in several trials (one
+    per Hyperband round), so each is kept once, with its best score.
+    """
+    best = {}
+    for trial in tuner.oracle.trials.values():
+        values = trial.hyperparameters.values
+        if values.get("tuner/epochs", max_epochs) != max_epochs:
+            continue
+        key = json.dumps({k: v for k, v in values.items() if not k.startswith("tuner/")}, sort_keys=True)
+        if key not in best or trial.score > best[key].score:
+            best[key] = trial
+    return sorted(best.values(), key=lambda t: t.score, reverse=True)[:k]
+
+
+def recheck(hps, seeds, train, val, max_epochs):
+    """Retrain one configuration with each seed under the search's own conditions, and return each run's
+    best validation accuracy: the same number the search scored it by, just not the luckiest one."""
+    scores = []
+    for seed in seeds:
+        keras.backend.clear_session()
+        model = FashionHyperModel(seed=seed).build(hps)
+        history = model.fit(*train, validation_data=val, epochs=max_epochs, batch_size=hps.get("batch_size"),
+                            verbose=0, callbacks=[keras.callbacks.EarlyStopping(monitor="val_loss", patience=5)])
+        scores.append(round(max(history.history["val_accuracy"]), 4))
+    return scores
 
 
 def summarize(runs):
@@ -155,9 +193,37 @@ def main(argv=None):
                             keras.callbacks.TensorBoard(str(board / "search"))])
     search_seconds = round(time.time() - started)
     trials = check_search(tuner)
-    best_hps = tuner.get_best_hyperparameters()[0]
     best_trial = tuner.oracle.get_best_trials()[0]
-    print(f"{trials} trials in {search_seconds}s. Best (val_accuracy {best_trial.score:.4f}): {format_hps(describe(best_hps))}")
+    print(f"{trials} trials in {search_seconds}s. Best (val_accuracy {best_trial.score:.4f}): "
+          f"{format_hps(describe(best_trial.hyperparameters))}")
+
+    recheck_seeds = [args.seed + RECHECK_SEED_OFFSET + i for i in range(args.recheck_seeds)]
+    candidates = top_configurations(tuner, args.top_k, args.max_epochs)
+    print(f"\n==> Re-check the top {len(candidates)} full-length configurations with seeds {recheck_seeds}")
+    rechecked = []
+    for rank, trial in enumerate(candidates, start=1):
+        scores = recheck(trial.hyperparameters, recheck_seeds, train, val, args.max_epochs)
+        rechecked.append({
+            "search_rank": rank,
+            "hyperparameters": describe(trial.hyperparameters),
+            "search_score": round(float(trial.score), 4),
+            "recheck_scores": scores,
+            "recheck_mean": round(statistics.mean(scores), 4),
+            "_hps": trial.hyperparameters,
+        })
+        print(f"  #{rank}: search {trial.score:.4f}, re-checked {statistics.mean(scores):.4f} {scores}  "
+              f"{format_hps(describe(trial.hyperparameters))}")
+    chosen = max(rechecked, key=lambda c: c["recheck_mean"])
+    best_hps = chosen.pop("_hps")
+    for c in rechecked:
+        c.pop("_hps", None)
+    by_recheck = sorted(rechecked, key=lambda c: c["recheck_mean"], reverse=True)
+    for recheck_rank, c in enumerate(by_recheck, start=1):
+        c["recheck_rank"] = recheck_rank
+    optimism = statistics.mean(c["search_score"] - c["recheck_mean"] for c in rechecked)
+    print(f"Chosen: search's #{chosen['search_rank']}, the best re-checked mean ({chosen['recheck_mean']:.4f}). "
+          f"The search's scores were {optimism:+.4f} above the re-checks on average; "
+          f"its #1 by {rechecked[0]['search_score'] - rechecked[0]['recheck_mean']:+.4f}.")
 
     seeds = [args.seed + i for i in range(args.repeats)]
     hyperparameters = {"baseline": BASELINE, "tuned": describe(best_hps)}
@@ -183,6 +249,8 @@ def main(argv=None):
         "max_epochs": args.max_epochs,
         "split": {"train": len(train[1]), "validation": len(val[1]), "test": len(test[1])},
         "search": {"trials": trials, "seconds": search_seconds, "best_val_accuracy": round(float(best_trial.score), 4)},
+        "recheck": {"seeds": recheck_seeds, "candidates": rechecked, "chosen_search_rank": chosen["search_rank"],
+                    "mean_search_minus_recheck": round(optimism, 4)},
         "baseline": {"hyperparameters": hyperparameters["baseline"], **results["baseline"]},
         "tuned": {"hyperparameters": hyperparameters["tuned"], **results["tuned"]},
         "tuned_minus_baseline": difference,

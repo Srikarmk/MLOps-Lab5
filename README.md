@@ -1,6 +1,6 @@
 # Hyperparameter Tuning Lab: Keras Tuner on Fashion MNIST
 
-This lab tunes a Fashion MNIST image classifier with [Keras Tuner](https://keras.io/keras_tuner/). It searches the network's depth, width, dropout, learning rate and batch size with **Hyperband**, then compares the tuned model with the lab's hand-picked baseline fairly: both trained the same way, with several seeds, on the test set only at the end. A second command compares Keras Tuner's three search strategies (Hyperband, random search and Bayesian optimization) at the same budget of training epochs.
+This lab tunes a Fashion MNIST image classifier with [Keras Tuner](https://keras.io/keras_tuner/). It searches the network's depth, width, dropout, learning rate and batch size with **Hyperband**, re-checks the search's top configurations with fresh seeds before choosing one, then compares the tuned model with the lab's hand-picked baseline fairly: both trained the same way, with several seeds, on the test set only at the end. A second command compares Keras Tuner's three search strategies (Hyperband, random search and Bayesian optimization) at the same budget of training epochs.
 
 It is based on the course's hyperparameter tuning lab (`Labs/Model_Development/Hyper_Parameters_Tuning/Keras_Tuner.ipynb`), kept unchanged in [original/Keras_Tuner.ipynb](original/Keras_Tuner.ipynb). This version is a work in progress; the sections below describe it as it stands.
 
@@ -49,10 +49,10 @@ This should print `2.21.0 3.15.1 1.4.8`.
 python -m tuning
 ```
 
-It takes about 10 minutes on a laptop CPU: about 3 minutes of search, then 10 final models (longer if other programs are busy). The first run also downloads Fashion MNIST (30 MB) to `~/.keras/datasets/`. `python -m tuning --quick` checks everything runs in about 25 seconds.
+It takes about 10 minutes on a laptop CPU: about 2 minutes of search, 2 minutes of re-checks, then 10 final models (longer if other programs are busy). The first run also downloads Fashion MNIST (30 MB) to `~/.keras/datasets/`. `python -m tuning --quick` checks everything runs in about 25 seconds.
 
 What it does:
-1. **Splits the data.** It sets aside 12,000 of the 60,000 training images as a validation set: 20% of each class, always the same images (`tuning/data.py`). The 10,000 test images are only used in step 4.
+1. **Splits the data.** It sets aside 12,000 of the 60,000 training images as a validation set: 20% of each class, always the same images (`tuning/data.py`). The 10,000 test images are only used in step 5.
 2. **Searches** with Hyperband (30 trials, at most 10 epochs each), scored by validation accuracy. The search space is `FashionHyperModel` in `tuning/models.py`:
 
    | Hyperparameter | Values | Notes |
@@ -62,18 +62,27 @@ What it does:
    | `dropout_1` … `dropout_3` | 0 to 0.5, in steps of 0.1 | conditional, like the units |
    | `learning_rate` | 0.0001 to 0.01 | sampled on a log scale, so each power of ten is equally likely |
    | `batch_size` | 32, 64, 128 or 256 | a training setting, tuned in the hypermodel's `fit()` |
-3. **Trains both models the same way**, with 5 seeds each: up to 30 epochs, stopping when validation accuracy hasn't improved for 3 epochs, and keeping the best epoch's weights.
-4. **Compares them on the test set**: mean ± standard deviation over the seeds, and the tuned-minus-baseline difference seed by seed, with a 95% interval.
+3. **Re-checks the top 5.** It takes the search's 5 best distinct configurations among trials that trained for the full 10 epochs, and retrains each with 3 fresh seeds under exactly the search's conditions. The best trial's score is the luckiest of 30 single runs, so it is optimistic; the re-checks' mean is not. The configuration with the best re-checked mean is chosen.
+4. **Trains both models the same way**, with 5 seeds each: up to 30 epochs, stopping when validation accuracy hasn't improved for 3 epochs, and keeping the best epoch's weights.
+5. **Compares them on the test set**: mean ± standard deviation over the seeds, and the tuned-minus-baseline difference seed by seed, with a 95% interval.
 
 It ends with:
 
 ```text
-30 trials in 165s. Best (val_accuracy 0.8942): layers=1, learning_rate=0.00121, batch_size=32, units_1=288, dropout_1=0.0
+30 trials in 126s. Best (val_accuracy 0.8942): layers=1, learning_rate=0.00121, batch_size=32, units_1=288, dropout_1=0.0
+
+==> Re-check the top 5 full-length configurations with seeds [142, 143, 144]
+  #1: search 0.8942, re-checked 0.8864 [0.8913, 0.8845, 0.8835]  layers=1, learning_rate=0.00121, batch_size=32, units_1=288, dropout_1=0.0
+  #2: search 0.8940, re-checked 0.8918 [0.8891, 0.8925, 0.8938]  layers=1, learning_rate=0.001095, batch_size=64, units_1=512, dropout_1=0.2
+  #3: search 0.8938, re-checked 0.8910 [0.8922, 0.8924, 0.8883]  layers=3, learning_rate=0.000349, batch_size=32, units_1=448, dropout_1=0.0, units_2=288, dropout_2=0.0, units_3=256, dropout_3=0.3
+  #4: search 0.8919, re-checked 0.8880 [0.8827, 0.892, 0.8893]  layers=1, learning_rate=0.00145, batch_size=32, units_1=512, dropout_1=0.0
+  #5: search 0.8905, re-checked 0.8859 [0.8867, 0.8867, 0.8843]  layers=3, learning_rate=0.000445, batch_size=256, units_1=416, dropout_1=0.1, units_2=416, dropout_2=0.2, units_3=32, dropout_3=0.4
+Chosen: search's #2, the best re-checked mean (0.8918). The search's scores were +0.0043 above the re-checks on average; its #1 by +0.0078.
 ...
 ==> Results on the test set (5 seeds each)
 Baseline  test_accuracy=0.8798 ± 0.0054  (best epoch 11.6 on average)  layers=1, learning_rate=0.001, batch_size=32, units_1=512, dropout_1=0.2
-Tuned     test_accuracy=0.8787 ± 0.0046  (best epoch 11.4 on average)  layers=1, learning_rate=0.00121, batch_size=32, units_1=288, dropout_1=0.0
-Tuned - baseline: -0.0011, 95% interval [-0.0092, +0.0070]; tuned better with 2 of 5 seeds
+Tuned     test_accuracy=0.8767 ± 0.0036  (best epoch 9 on average)  layers=1, learning_rate=0.001095, batch_size=64, units_1=512, dropout_1=0.2
+Tuned - baseline: -0.0031, 95% interval [-0.0071, +0.0009]; tuned better with 1 of 5 seeds
 
 Saved runs/<date-time>/results.json
 View the training curves: tensorboard --logdir runs/<date-time>/tensorboard
@@ -115,18 +124,32 @@ Averages over the 3 search seeds:
 
 **From the lab** (`python -m tuning`, one Hyperband search):
 
-| Search space (same budget: 30 Hyperband trials) | Best trial's validation accuracy | Tuned model retrained, 5 seeds: validation | Test | Tuned − baseline on test (95% interval) |
+The search's top 5, re-checked with 3 fresh seeds each under the search's own conditions:
+
+| Search rank | Configuration | Search's score | Re-checked mean | Re-checked rank |
 |---|---|---|---|---|
-| The original's: width and 3 learning rates | 89.59% | 89.50% | 88.38% ± 0.44 | +0.40 points (−0.15 to +0.95) |
-| This version's: depth, width and dropout per layer, learning rate, batch size | 89.42% | 89.00% | 87.87% ± 0.46 | −0.11 points (−0.92 to +0.70) |
-| *Baseline, for reference* | | *89.24%* | *87.98% ± 0.54* | |
+| 1 | 1 layer of 288, no dropout, learning rate 0.0012, batch 32 | 89.42% | 88.64% | 4 |
+| 2 | 1 layer of 512, dropout 0.2, learning rate 0.0011, batch 64 | 89.40% | **89.18%** | **1** |
+| 3 | 3 layers (448, 288, 256), learning rate 0.00035, batch 32 | 89.38% | 89.10% | 2 |
+| 4 | 1 layer of 512, no dropout, learning rate 0.0015, batch 32 | 89.19% | 88.80% | 3 |
+| 5 | 3 layers (416, 416, 32), learning rate 0.00045, batch 256 | 89.05% | 88.59% | 5 |
 
-(The first row was run before every trial started from the same random state, so its search is not exactly reproducible with the current code.)
+- **The search's scores are optimistic, and its #1 most of all.** All 5 scored lower when re-checked, by 0.43 points on average. The #1 dropped 0.78 points and ranked only 4th. A search score is the luckiest of many single runs, and the top one is the luckiest of all. Re-checking with the exact search conditions and the search's own seed reproduces its score exactly, so the drop is seed luck, not a different setup.
+- **The re-checked choice is almost the baseline.** It is the baseline's network (512 units, dropout 0.2) with a learning rate of 0.0011 instead of 0.001 and batches of 64 instead of 32. Trained like the baseline, it scores 0.31 points below it on test (95% interval −0.71 to +0.09). This search found nothing better than the hand-picked model.
+- **The re-check fixes luck, not the short horizon.** It uses the search's 10-epoch trials, so it still favours configurations that learn fast. The strategy comparison below shows that slower, deeper configurations do better when trained to the end.
 
-- **One search beat the baseline by no more than noise.** With the original's two hyperparameters, the search kept the baseline's learning rate and only changed the width. With the larger space, the chosen network (one layer of 288 units, no dropout) is no better than the baseline.
-- **The search's own score is optimistic.** The best trial's validation accuracy comes from one training run, and it is the best of 30. Retrained with 5 seeds, the larger space's winner lost 0.42 points of validation accuracy, enough to fall below the baseline.
-- **The width the small search picks is luck.** At learning rate 0.001, trials from 96 to 448 units all scored 88.7–89.6% on validation, a range about the size of seed-to-seed variation.
+How the lab's result changed through the steps (the baseline is the same in every row: 87.98% ± 0.54 on test):
+
+| Version | Chosen configuration | Test, 5 seeds | Tuned − baseline (95% interval) |
+|---|---|---|---|
+| Step 2: the original's search space (width, 3 learning rates) | 1 layer of 448, learning rate 0.001 | 88.38% ± 0.44 | +0.40 points (−0.15 to +0.95) |
+| Step 3: the larger search space, search's #1 | 1 layer of 288, learning rate 0.0012 | 87.87% ± 0.46 | −0.11 points (−0.92 to +0.70) |
+| Step 5: the larger search space, best of the top 5 re-checked | 1 layer of 512, learning rate 0.0011, batch 64 | 87.67% ± 0.36 | −0.31 points (−0.71 to +0.09) |
+
+(Step 2's search ran before every trial started from the same random state, so it is not exactly reproducible with the current code.)
+
 - **One run of each proves nothing.** Across seeds, a single model's test accuracy varies by about ±0.5 points. That's more than the difference the original notebook reported between its baseline and tuned models (0.36 points in one run).
+- **The width the small search picks is luck.** In step 2, at learning rate 0.001, trials from 96 to 448 units all scored 88.7–89.6% on validation, a range about the size of seed-to-seed variation.
 - **10 epochs was too few for the baseline.** Training until validation accuracy stops improving, its best epoch averaged 11.6. The original's fixed 10 epochs cut it short.
 
 **From the strategy comparison** (`python -m tuning.compare`, 9 searches):
@@ -151,4 +174,5 @@ Averages over the 3 search seeds:
 | Baseline and tuned model compared on one unseeded run each | Both trained the same way with 5 seeds, and compared by mean ± spread and a paired 95% interval. The test set is used only for this comparison |
 | A model-builder function tuning two hyperparameters: one layer's units and three fixed learning rates | A `HyperModel` subclass tuning the depth (1–3 layers), each layer's units and dropout as **conditional** hyperparameters, the learning rate on a **log scale**, and the **batch size** in its `fit()` |
 | Only Hyperband, with no way to tell whether another strategy would do better | `python -m tuning.compare`: Hyperband, random search and Bayesian optimization at the same budget of training epochs, over 3 independent search seeds, with every chosen configuration retrained over 3 seeds |
+| The tuned model is the search's single best trial | The search's top 5 configurations are re-checked with 3 fresh seeds under the search's conditions, and the best re-checked mean is chosen. `results.json` records every candidate's search score and re-checked scores |
 | Search trials start from whatever random state the previous one left. With the TensorBoard callback, a repeated search sometimes scored trials differently | Each trial reseeds before building its model, so repeated searches match exactly and a configuration gets the same score whichever strategy tries it |
