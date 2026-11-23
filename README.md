@@ -68,7 +68,7 @@ pip install -r requirements.txt
 
 `requirements.txt` pins every package's version.
 
-The install downloads about 300 MB, 220 MB of it TensorFlow, and took 11 minutes here. Check it:
+The install downloads about 300 MB, 220 MB of it TensorFlow, and took between 1 and 11 minutes in my runs, depending on the connection. Check it:
 
 ```bash
 python -c "import tensorflow as tf, keras, keras_tuner as kt; print(tf.__version__, keras.__version__, kt.__version__)"
@@ -86,7 +86,7 @@ cd MLOps-Lab5
 
 `run_lab.sh` runs four stages and stops at the first failure:
 1. **Python:** finds Python 3.10–3.13 (preferring 3.12) and creates `.venv`, unless it already exists. To pick one, set `PYTHON=/path/to/python3.12`.
-2. **Packages:** installs the pinned packages from `requirements.txt`. The first time takes about 10 minutes.
+2. **Packages:** installs the pinned packages from `requirements.txt`. The first time takes 1 to 11 minutes, depending on the connection.
 3. **Tests:** runs the 16 tests in `tests/`, about 15 seconds.
 4. **The lab:** runs `python -m tuning`, about 10 minutes.
 
