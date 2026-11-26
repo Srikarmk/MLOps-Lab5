@@ -3,7 +3,7 @@
 import json
 
 from tuning import compare
-from tuning.models import FashionHyperModel
+from tuning.models import CNNHyperModel
 
 
 def test_default_search_seeds_cannot_share_draws():
@@ -13,7 +13,7 @@ def test_default_search_seeds_cannot_share_draws():
 
 
 def test_bayesian_optimization_uses_its_model_within_the_budget(tmp_path):
-    tuner = compare.make_tuner("bayesian", FashionHyperModel(), seed=1, max_epochs=10, trials=12,
+    tuner = compare.make_tuner("bayesian", CNNHyperModel(), seed=1, max_epochs=10, trials=12,
                                directory=tmp_path, initial_points=4)
     # Keras Tuner's default would be 3 random trials per hyperparameter: more than all 12 trials
     assert tuner.oracle.num_initial_points == 4

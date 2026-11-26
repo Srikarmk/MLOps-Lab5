@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tuning import lab
+from tuning import augment, lab
 
 
 def fake_tuner(*trials):
@@ -69,3 +69,10 @@ def test_quick_run_is_complete_and_reproducible(small_data, tmp_path):
     best = max(candidates, key=lambda c: c["recheck_mean"])
     assert saved["tuned"]["hyperparameters"] == best["hyperparameters"]  # chosen by re-checked mean
     assert len(saved["tuned"]["runs"]) == len(saved["baseline"]["runs"]) == 2
+
+    # the augmentation check rebuilds the chosen model exactly: with augmentation as the lab chose it, it
+    # repeats the lab's tuned run for the same seed
+    check = augment.main(["--quick", "--runs-dir", str(tmp_path / "a")])
+    as_chosen = "augmented" if saved["tuned"]["hyperparameters"]["augment"] else "not_augmented"
+    assert check[as_chosen]["runs"][0] == saved["tuned"]["runs"][0]
+    assert "augmented_minus_baseline" in check

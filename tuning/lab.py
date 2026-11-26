@@ -1,8 +1,8 @@
 """The lab end to end: search the network's shape and training settings with Hyperband, then compare the tuned
 model with the baseline fairly.
 
-    python -m tuning                      the full lab (about 10 minutes on a laptop CPU)
-    python -m tuning --quick              a quick check that everything runs (about 1 minute)
+    python -m tuning                      the full lab (about 40 minutes on a laptop CPU)
+    python -m tuning --quick              a quick check that everything runs (about 2 minutes)
 
 The search's top configurations are re-checked with fresh seeds before one is chosen, because the
 search's best score is the luckiest of many single runs. The chosen model and the baseline are then
@@ -22,10 +22,9 @@ import keras
 import keras_tuner as kt
 import tensorflow as tf
 
-from tuning.data import load_fashion_mnist, split_validation
-from tuning.models import BASELINE_BATCH_SIZE, FashionHyperModel, build_baseline, describe
+from tuning.data import load_cifar10, split_validation
+from tuning.models import BASELINE, BASELINE_BATCH_SIZE, CNNHyperModel, build_baseline, describe
 
-BASELINE = {"layers": 1, "learning_rate": 0.001, "batch_size": BASELINE_BATCH_SIZE, "units_1": 512, "dropout_1": 0.2}
 RECHECK_SEED_OFFSET = 100  # re-check seeds are seed+100, seed+101, ...: different from the search's and the final models'
 
 # Two-sided 95% critical values of Student's t, by degrees of freedom, for the paired-difference interval
@@ -131,7 +130,7 @@ def recheck(hps, seeds, train, val, max_epochs):
     scores = []
     for seed in seeds:
         keras.backend.clear_session()
-        model = FashionHyperModel(seed=seed).build(hps)
+        model = CNNHyperModel(seed=seed).build(hps)
         history = model.fit(*train, validation_data=val, epochs=max_epochs, batch_size=hps.get("batch_size"),
                             verbose=0, callbacks=[keras.callbacks.EarlyStopping(monitor="val_loss", patience=5)])
         scores.append(round(max(history.history["val_accuracy"]), 4))
@@ -169,13 +168,14 @@ def main(argv=None):
     board = run_dir / "tensorboard"
     print(f"Run folder: {run_dir}")
 
-    (x_full, y_full), test = load_fashion_mnist()
+    (x_full, y_full), test = load_cifar10()
     train, val = split_validation(x_full, y_full)
     print(f"{len(train[1])} training, {len(val[1])} validation and {len(test[1])} test images")
 
-    print("\n==> Hyperband search over depth, units, dropout, learning rate and batch size")
+    print("\n==> Hyperband search over blocks, filters, kernel size, dense units, dropout, augmentation, "
+          "learning rate and batch size")
     tuner = kt.Hyperband(
-        FashionHyperModel(seed=args.seed),
+        CNNHyperModel(seed=args.seed),
         objective="val_accuracy",
         max_epochs=args.max_epochs,
         factor=3,
@@ -222,14 +222,14 @@ def main(argv=None):
         c["recheck_rank"] = recheck_rank
     optimism = statistics.mean(c["search_score"] - c["recheck_mean"] for c in rechecked)
     print(f"Chosen: search's #{chosen['search_rank']}, the best re-checked mean ({chosen['recheck_mean']:.4f}). "
-          f"The search's scores were {optimism:+.4f} above the re-checks on average; "
-          f"its #1 by {rechecked[0]['search_score'] - rechecked[0]['recheck_mean']:+.4f}.")
+          f"Search score minus re-checked mean: {optimism:+.4f} on average, "
+          f"{rechecked[0]['search_score'] - rechecked[0]['recheck_mean']:+.4f} for the search's #1.")
 
     seeds = [args.seed + i for i in range(args.repeats)]
     hyperparameters = {"baseline": BASELINE, "tuned": describe(best_hps)}
     models = {
         "baseline": (lambda seed: build_baseline(), BASELINE_BATCH_SIZE),
-        "tuned": (lambda seed: FashionHyperModel(seed=seed).build(best_hps), best_hps.get("batch_size")),
+        "tuned": (lambda seed: CNNHyperModel(seed=seed).build(best_hps), best_hps.get("batch_size")),
     }
     results = {}
     for name, (build, batch_size) in models.items():
@@ -247,12 +247,15 @@ def main(argv=None):
     output = {
         "seed": args.seed,
         "max_epochs": args.max_epochs,
+        "final_max_epochs": args.final_max_epochs,
+        "patience": args.patience,
         "split": {"train": len(train[1]), "validation": len(val[1]), "test": len(test[1])},
         "search": {"trials": trials, "seconds": search_seconds, "best_val_accuracy": round(float(best_trial.score), 4)},
         "recheck": {"seeds": recheck_seeds, "candidates": rechecked, "chosen_search_rank": chosen["search_rank"],
                     "mean_search_minus_recheck": round(optimism, 4)},
         "baseline": {"hyperparameters": hyperparameters["baseline"], **results["baseline"]},
-        "tuned": {"hyperparameters": hyperparameters["tuned"], **results["tuned"]},
+        "tuned": {"hyperparameters": hyperparameters["tuned"], "exact_hyperparameters": exact_values(best_hps),
+                  **results["tuned"]},
         "tuned_minus_baseline": difference,
     }
     (run_dir / "results.json").write_text(json.dumps(output, indent=2))
@@ -269,6 +272,12 @@ def main(argv=None):
     print(f"\nSaved {run_dir / 'results.json'}")
     print(f"View the training curves: tensorboard --logdir {board}")
     return output
+
+
+def exact_values(hps):
+    """The chosen values unrounded (results.json's "hyperparameters" rounds the learning rate for reading), so the
+    chosen model can be rebuilt exactly, as `python -m tuning.augment` does."""
+    return {k: v for k, v in hps.values.items() if not k.startswith("tuner/")}
 
 
 def format_hps(hps):

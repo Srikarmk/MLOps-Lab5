@@ -1,0 +1,1187 @@
+{
+  "settings": {
+    "seeds": [
+      42,
+      10042,
+      20042
+    ],
+    "max_epochs": 10,
+    "retrain_seeds": [
+      42,
+      43,
+      44
+    ],
+    "bayesian_initial_points": 4,
+    "final_max_epochs": 30,
+    "patience": 3
+  },
+  "summary": {
+    "hyperband": {
+      "trials": 30,
+      "epochs": 118.6667,
+      "search_best_val_accuracy": 0.695,
+      "retrained_val_accuracy": 0.725,
+      "retrained_test_accuracy": 0.7209
+    },
+    "random": {
+      "trials": 12,
+      "epochs": 117.6667,
+      "search_best_val_accuracy": 0.6938,
+      "retrained_val_accuracy": 0.716,
+      "retrained_test_accuracy": 0.7116
+    },
+    "bayesian": {
+      "trials": 12,
+      "epochs": 118.6667,
+      "search_best_val_accuracy": 0.6901,
+      "retrained_val_accuracy": 0.7176,
+      "retrained_test_accuracy": 0.7164
+    }
+  },
+  "baseline": {
+    "hyperparameters": {
+      "blocks": 3,
+      "filters_1": 32,
+      "filters_2": 64,
+      "filters_3": 64,
+      "kernel_size": 3,
+      "dense_units": 64,
+      "dropout": 0.0,
+      "augment": false,
+      "learning_rate": 0.001,
+      "batch_size": 32
+    },
+    "retrained_val_accuracy": 0.7033,
+    "retrained_test_accuracy": 0.6995,
+    "retrain_runs": [
+      {
+        "seed": 42,
+        "epochs_trained": 10,
+        "best_epoch": 7,
+        "val_accuracy": 0.7047,
+        "test_accuracy": 0.7028,
+        "test_loss": 0.9316
+      },
+      {
+        "seed": 43,
+        "epochs_trained": 11,
+        "best_epoch": 8,
+        "val_accuracy": 0.7085,
+        "test_accuracy": 0.7054,
+        "test_loss": 0.9495
+      },
+      {
+        "seed": 44,
+        "epochs_trained": 10,
+        "best_epoch": 7,
+        "val_accuracy": 0.6966,
+        "test_accuracy": 0.6902,
+        "test_loss": 0.9691
+      }
+    ]
+  },
+  "searches": [
+    {
+      "strategy": "hyperband",
+      "seed": 42,
+      "trials": 30,
+      "epochs": 120,
+      "seconds": 687,
+      "search_best_val_accuracy": 0.6988,
+      "chosen": {
+        "blocks": 4,
+        "filters_1": 16,
+        "filters_2": 64,
+        "filters_3": 64,
+        "filters_4": 32,
+        "kernel_size": 3,
+        "dense_units": 224,
+        "dropout": 0.1,
+        "augment": false,
+        "learning_rate": 0.000596,
+        "batch_size": 64
+      },
+      "curve": [
+        [
+          2,
+          0.6125
+        ],
+        [
+          4,
+          0.6125
+        ],
+        [
+          6,
+          0.6125
+        ],
+        [
+          8,
+          0.6125
+        ],
+        [
+          10,
+          0.6125
+        ],
+        [
+          12,
+          0.6125
+        ],
+        [
+          14,
+          0.6125
+        ],
+        [
+          16,
+          0.6125
+        ],
+        [
+          18,
+          0.6125
+        ],
+        [
+          20,
+          0.6125
+        ],
+        [
+          22,
+          0.6125
+        ],
+        [
+          24,
+          0.6125
+        ],
+        [
+          26,
+          0.6741
+        ],
+        [
+          28,
+          0.6741
+        ],
+        [
+          30,
+          0.6741
+        ],
+        [
+          32,
+          0.6741
+        ],
+        [
+          38,
+          0.6816
+        ],
+        [
+          44,
+          0.695
+        ],
+        [
+          48,
+          0.695
+        ],
+        [
+          52,
+          0.695
+        ],
+        [
+          56,
+          0.695
+        ],
+        [
+          60,
+          0.695
+        ],
+        [
+          64,
+          0.695
+        ],
+        [
+          68,
+          0.695
+        ],
+        [
+          74,
+          0.695
+        ],
+        [
+          80,
+          0.695
+        ],
+        [
+          90,
+          0.695
+        ],
+        [
+          100,
+          0.695
+        ],
+        [
+          110,
+          0.695
+        ],
+        [
+          120,
+          0.6988
+        ]
+      ],
+      "retrained_val_accuracy": 0.7069,
+      "retrained_test_accuracy": 0.7016,
+      "retrain_runs": [
+        {
+          "seed": 42,
+          "epochs_trained": 16,
+          "best_epoch": 13,
+          "val_accuracy": 0.7068,
+          "test_accuracy": 0.7013,
+          "test_loss": 0.9287
+        },
+        {
+          "seed": 43,
+          "epochs_trained": 20,
+          "best_epoch": 17,
+          "val_accuracy": 0.7003,
+          "test_accuracy": 0.697,
+          "test_loss": 0.9583
+        },
+        {
+          "seed": 44,
+          "epochs_trained": 16,
+          "best_epoch": 13,
+          "val_accuracy": 0.7137,
+          "test_accuracy": 0.7065,
+          "test_loss": 0.898
+        }
+      ]
+    },
+    {
+      "strategy": "random",
+      "seed": 42,
+      "trials": 12,
+      "epochs": 114,
+      "seconds": 697,
+      "search_best_val_accuracy": 0.6883,
+      "chosen": {
+        "blocks": 4,
+        "filters_1": 64,
+        "filters_2": 16,
+        "filters_3": 64,
+        "filters_4": 64,
+        "kernel_size": 3,
+        "dense_units": 96,
+        "dropout": 0.4,
+        "augment": false,
+        "learning_rate": 0.000797,
+        "batch_size": 32
+      },
+      "curve": [
+        [
+          10,
+          0.6797
+        ],
+        [
+          20,
+          0.6797
+        ],
+        [
+          30,
+          0.6797
+        ],
+        [
+          40,
+          0.6883
+        ],
+        [
+          48,
+          0.6883
+        ],
+        [
+          57,
+          0.6883
+        ],
+        [
+          67,
+          0.6883
+        ],
+        [
+          77,
+          0.6883
+        ],
+        [
+          87,
+          0.6883
+        ],
+        [
+          97,
+          0.6883
+        ],
+        [
+          107,
+          0.6883
+        ],
+        [
+          114,
+          0.6883
+        ]
+      ],
+      "retrained_val_accuracy": 0.6927,
+      "retrained_test_accuracy": 0.6895,
+      "retrain_runs": [
+        {
+          "seed": 42,
+          "epochs_trained": 11,
+          "best_epoch": 8,
+          "val_accuracy": 0.6883,
+          "test_accuracy": 0.6841,
+          "test_loss": 0.9356
+        },
+        {
+          "seed": 43,
+          "epochs_trained": 20,
+          "best_epoch": 17,
+          "val_accuracy": 0.7013,
+          "test_accuracy": 0.7003,
+          "test_loss": 0.9933
+        },
+        {
+          "seed": 44,
+          "epochs_trained": 19,
+          "best_epoch": 16,
+          "val_accuracy": 0.6884,
+          "test_accuracy": 0.6841,
+          "test_loss": 1.0363
+        }
+      ]
+    },
+    {
+      "strategy": "bayesian",
+      "seed": 42,
+      "trials": 12,
+      "epochs": 116,
+      "seconds": 593,
+      "search_best_val_accuracy": 0.6918,
+      "chosen": {
+        "blocks": 3,
+        "filters_1": 16,
+        "filters_2": 64,
+        "filters_3": 32,
+        "kernel_size": 3,
+        "dense_units": 256,
+        "dropout": 0.4,
+        "augment": false,
+        "learning_rate": 0.000436,
+        "batch_size": 32
+      },
+      "curve": [
+        [
+          10,
+          0.6797
+        ],
+        [
+          20,
+          0.6797
+        ],
+        [
+          30,
+          0.6797
+        ],
+        [
+          40,
+          0.6883
+        ],
+        [
+          50,
+          0.6884
+        ],
+        [
+          56,
+          0.6884
+        ],
+        [
+          66,
+          0.6884
+        ],
+        [
+          76,
+          0.6884
+        ],
+        [
+          86,
+          0.6884
+        ],
+        [
+          96,
+          0.6918
+        ],
+        [
+          106,
+          0.6918
+        ],
+        [
+          116,
+          0.6918
+        ]
+      ],
+      "retrained_val_accuracy": 0.7209,
+      "retrained_test_accuracy": 0.7189,
+      "retrain_runs": [
+        {
+          "seed": 42,
+          "epochs_trained": 20,
+          "best_epoch": 17,
+          "val_accuracy": 0.7248,
+          "test_accuracy": 0.7211,
+          "test_loss": 0.8378
+        },
+        {
+          "seed": 43,
+          "epochs_trained": 18,
+          "best_epoch": 15,
+          "val_accuracy": 0.7157,
+          "test_accuracy": 0.7137,
+          "test_loss": 0.8575
+        },
+        {
+          "seed": 44,
+          "epochs_trained": 21,
+          "best_epoch": 18,
+          "val_accuracy": 0.7221,
+          "test_accuracy": 0.7219,
+          "test_loss": 0.8602
+        }
+      ]
+    },
+    {
+      "strategy": "hyperband",
+      "seed": 10042,
+      "trials": 30,
+      "epochs": 120,
+      "seconds": 700,
+      "search_best_val_accuracy": 0.6727,
+      "chosen": {
+        "blocks": 4,
+        "filters_1": 16,
+        "filters_2": 32,
+        "filters_3": 32,
+        "filters_4": 64,
+        "kernel_size": 3,
+        "dense_units": 64,
+        "dropout": 0.0,
+        "augment": true,
+        "learning_rate": 0.001704,
+        "batch_size": 32
+      },
+      "curve": [
+        [
+          2,
+          0.5556
+        ],
+        [
+          4,
+          0.5556
+        ],
+        [
+          6,
+          0.5556
+        ],
+        [
+          8,
+          0.5556
+        ],
+        [
+          10,
+          0.5556
+        ],
+        [
+          12,
+          0.5556
+        ],
+        [
+          14,
+          0.5556
+        ],
+        [
+          16,
+          0.5556
+        ],
+        [
+          18,
+          0.5556
+        ],
+        [
+          20,
+          0.5556
+        ],
+        [
+          22,
+          0.5799
+        ],
+        [
+          24,
+          0.5799
+        ],
+        [
+          26,
+          0.6249
+        ],
+        [
+          28,
+          0.6249
+        ],
+        [
+          30,
+          0.6249
+        ],
+        [
+          32,
+          0.6249
+        ],
+        [
+          38,
+          0.6702
+        ],
+        [
+          44,
+          0.6727
+        ],
+        [
+          48,
+          0.6727
+        ],
+        [
+          52,
+          0.6727
+        ],
+        [
+          56,
+          0.6727
+        ],
+        [
+          60,
+          0.6727
+        ],
+        [
+          64,
+          0.6727
+        ],
+        [
+          68,
+          0.6727
+        ],
+        [
+          74,
+          0.6727
+        ],
+        [
+          80,
+          0.6727
+        ],
+        [
+          90,
+          0.6727
+        ],
+        [
+          100,
+          0.6727
+        ],
+        [
+          110,
+          0.6727
+        ],
+        [
+          120,
+          0.6727
+        ]
+      ],
+      "retrained_val_accuracy": 0.7022,
+      "retrained_test_accuracy": 0.7003,
+      "retrain_runs": [
+        {
+          "seed": 42,
+          "epochs_trained": 14,
+          "best_epoch": 11,
+          "val_accuracy": 0.6994,
+          "test_accuracy": 0.6999,
+          "test_loss": 0.8766
+        },
+        {
+          "seed": 43,
+          "epochs_trained": 19,
+          "best_epoch": 16,
+          "val_accuracy": 0.6883,
+          "test_accuracy": 0.6793,
+          "test_loss": 0.9579
+        },
+        {
+          "seed": 44,
+          "epochs_trained": 20,
+          "best_epoch": 17,
+          "val_accuracy": 0.7188,
+          "test_accuracy": 0.7218,
+          "test_loss": 0.8109
+        }
+      ]
+    },
+    {
+      "strategy": "random",
+      "seed": 10042,
+      "trials": 12,
+      "epochs": 120,
+      "seconds": 710,
+      "search_best_val_accuracy": 0.6764,
+      "chosen": {
+        "blocks": 3,
+        "filters_1": 64,
+        "filters_2": 64,
+        "filters_3": 16,
+        "kernel_size": 5,
+        "dense_units": 96,
+        "dropout": 0.1,
+        "augment": false,
+        "learning_rate": 0.000664,
+        "batch_size": 32
+      },
+      "curve": [
+        [
+          10,
+          0.6451
+        ],
+        [
+          20,
+          0.6451
+        ],
+        [
+          30,
+          0.6451
+        ],
+        [
+          40,
+          0.6485
+        ],
+        [
+          50,
+          0.6485
+        ],
+        [
+          60,
+          0.6485
+        ],
+        [
+          70,
+          0.6746
+        ],
+        [
+          80,
+          0.6746
+        ],
+        [
+          90,
+          0.6746
+        ],
+        [
+          100,
+          0.6746
+        ],
+        [
+          110,
+          0.6764
+        ],
+        [
+          120,
+          0.6764
+        ]
+      ],
+      "retrained_val_accuracy": 0.6895,
+      "retrained_test_accuracy": 0.6847,
+      "retrain_runs": [
+        {
+          "seed": 42,
+          "epochs_trained": 13,
+          "best_epoch": 10,
+          "val_accuracy": 0.688,
+          "test_accuracy": 0.6865,
+          "test_loss": 1.0047
+        },
+        {
+          "seed": 43,
+          "epochs_trained": 13,
+          "best_epoch": 10,
+          "val_accuracy": 0.6941,
+          "test_accuracy": 0.6939,
+          "test_loss": 0.9781
+        },
+        {
+          "seed": 44,
+          "epochs_trained": 18,
+          "best_epoch": 15,
+          "val_accuracy": 0.6863,
+          "test_accuracy": 0.6738,
+          "test_loss": 1.1258
+        }
+      ]
+    },
+    {
+      "strategy": "bayesian",
+      "seed": 10042,
+      "trials": 12,
+      "epochs": 120,
+      "seconds": 807,
+      "search_best_val_accuracy": 0.7204,
+      "chosen": {
+        "blocks": 2,
+        "filters_1": 64,
+        "filters_2": 64,
+        "kernel_size": 3,
+        "dense_units": 160,
+        "dropout": 0.3,
+        "augment": true,
+        "learning_rate": 0.000847,
+        "batch_size": 64
+      },
+      "curve": [
+        [
+          10,
+          0.6451
+        ],
+        [
+          20,
+          0.6451
+        ],
+        [
+          30,
+          0.6451
+        ],
+        [
+          40,
+          0.6485
+        ],
+        [
+          50,
+          0.6485
+        ],
+        [
+          60,
+          0.6485
+        ],
+        [
+          70,
+          0.6568
+        ],
+        [
+          80,
+          0.718
+        ],
+        [
+          90,
+          0.718
+        ],
+        [
+          100,
+          0.7196
+        ],
+        [
+          110,
+          0.7204
+        ],
+        [
+          120,
+          0.7204
+        ]
+      ],
+      "retrained_val_accuracy": 0.7368,
+      "retrained_test_accuracy": 0.7372,
+      "retrain_runs": [
+        {
+          "seed": 42,
+          "epochs_trained": 23,
+          "best_epoch": 20,
+          "val_accuracy": 0.7392,
+          "test_accuracy": 0.742,
+          "test_loss": 0.7469
+        },
+        {
+          "seed": 43,
+          "epochs_trained": 17,
+          "best_epoch": 14,
+          "val_accuracy": 0.7367,
+          "test_accuracy": 0.734,
+          "test_loss": 0.7562
+        },
+        {
+          "seed": 44,
+          "epochs_trained": 22,
+          "best_epoch": 19,
+          "val_accuracy": 0.7345,
+          "test_accuracy": 0.7356,
+          "test_loss": 0.7676
+        }
+      ]
+    },
+    {
+      "strategy": "hyperband",
+      "seed": 20042,
+      "trials": 30,
+      "epochs": 116,
+      "seconds": 669,
+      "search_best_val_accuracy": 0.7136,
+      "chosen": {
+        "blocks": 4,
+        "filters_1": 16,
+        "filters_2": 64,
+        "filters_3": 64,
+        "filters_4": 64,
+        "kernel_size": 5,
+        "dense_units": 128,
+        "dropout": 0.0,
+        "augment": true,
+        "learning_rate": 0.001011,
+        "batch_size": 64
+      },
+      "curve": [
+        [
+          2,
+          0.3329
+        ],
+        [
+          4,
+          0.4487
+        ],
+        [
+          6,
+          0.4487
+        ],
+        [
+          8,
+          0.5087
+        ],
+        [
+          10,
+          0.589
+        ],
+        [
+          12,
+          0.589
+        ],
+        [
+          14,
+          0.589
+        ],
+        [
+          16,
+          0.589
+        ],
+        [
+          18,
+          0.589
+        ],
+        [
+          20,
+          0.589
+        ],
+        [
+          22,
+          0.589
+        ],
+        [
+          24,
+          0.589
+        ],
+        [
+          26,
+          0.641
+        ],
+        [
+          28,
+          0.641
+        ],
+        [
+          30,
+          0.6424
+        ],
+        [
+          32,
+          0.6424
+        ],
+        [
+          38,
+          0.7136
+        ],
+        [
+          44,
+          0.7136
+        ],
+        [
+          48,
+          0.7136
+        ],
+        [
+          52,
+          0.7136
+        ],
+        [
+          56,
+          0.7136
+        ],
+        [
+          60,
+          0.7136
+        ],
+        [
+          64,
+          0.7136
+        ],
+        [
+          68,
+          0.7136
+        ],
+        [
+          74,
+          0.7136
+        ],
+        [
+          80,
+          0.7136
+        ],
+        [
+          90,
+          0.7136
+        ],
+        [
+          96,
+          0.7136
+        ],
+        [
+          106,
+          0.7136
+        ],
+        [
+          116,
+          0.7136
+        ]
+      ],
+      "retrained_val_accuracy": 0.7659,
+      "retrained_test_accuracy": 0.7607,
+      "retrain_runs": [
+        {
+          "seed": 42,
+          "epochs_trained": 18,
+          "best_epoch": 15,
+          "val_accuracy": 0.7637,
+          "test_accuracy": 0.7517,
+          "test_loss": 0.7391
+        },
+        {
+          "seed": 43,
+          "epochs_trained": 19,
+          "best_epoch": 16,
+          "val_accuracy": 0.756,
+          "test_accuracy": 0.7512,
+          "test_loss": 0.7604
+        },
+        {
+          "seed": 44,
+          "epochs_trained": 30,
+          "best_epoch": 30,
+          "val_accuracy": 0.7781,
+          "test_accuracy": 0.7793,
+          "test_loss": 0.7114
+        }
+      ]
+    },
+    {
+      "strategy": "random",
+      "seed": 20042,
+      "trials": 12,
+      "epochs": 119,
+      "seconds": 631,
+      "search_best_val_accuracy": 0.7167,
+      "chosen": {
+        "blocks": 4,
+        "filters_1": 16,
+        "filters_2": 64,
+        "filters_3": 64,
+        "filters_4": 64,
+        "kernel_size": 5,
+        "dense_units": 128,
+        "dropout": 0.0,
+        "augment": true,
+        "learning_rate": 0.001011,
+        "batch_size": 64
+      },
+      "curve": [
+        [
+          10,
+          0.4243
+        ],
+        [
+          20,
+          0.5617
+        ],
+        [
+          30,
+          0.5617
+        ],
+        [
+          40,
+          0.6149
+        ],
+        [
+          50,
+          0.6645
+        ],
+        [
+          60,
+          0.6645
+        ],
+        [
+          70,
+          0.7167
+        ],
+        [
+          80,
+          0.7167
+        ],
+        [
+          90,
+          0.7167
+        ],
+        [
+          99,
+          0.7167
+        ],
+        [
+          109,
+          0.7167
+        ],
+        [
+          119,
+          0.7167
+        ]
+      ],
+      "retrained_val_accuracy": 0.7659,
+      "retrained_test_accuracy": 0.7607,
+      "retrain_runs": [
+        {
+          "seed": 42,
+          "epochs_trained": 18,
+          "best_epoch": 15,
+          "val_accuracy": 0.7637,
+          "test_accuracy": 0.7517,
+          "test_loss": 0.7391
+        },
+        {
+          "seed": 43,
+          "epochs_trained": 19,
+          "best_epoch": 16,
+          "val_accuracy": 0.756,
+          "test_accuracy": 0.7512,
+          "test_loss": 0.7604
+        },
+        {
+          "seed": 44,
+          "epochs_trained": 30,
+          "best_epoch": 30,
+          "val_accuracy": 0.7781,
+          "test_accuracy": 0.7793,
+          "test_loss": 0.7114
+        }
+      ]
+    },
+    {
+      "strategy": "bayesian",
+      "seed": 20042,
+      "trials": 12,
+      "epochs": 120,
+      "seconds": 629,
+      "search_best_val_accuracy": 0.6582,
+      "chosen": {
+        "blocks": 3,
+        "filters_1": 16,
+        "filters_2": 64,
+        "filters_3": 32,
+        "kernel_size": 5,
+        "dense_units": 128,
+        "dropout": 0.1,
+        "augment": false,
+        "learning_rate": 0.00076,
+        "batch_size": 256
+      },
+      "curve": [
+        [
+          10,
+          0.4243
+        ],
+        [
+          20,
+          0.5617
+        ],
+        [
+          30,
+          0.5617
+        ],
+        [
+          40,
+          0.6149
+        ],
+        [
+          50,
+          0.6356
+        ],
+        [
+          60,
+          0.6356
+        ],
+        [
+          70,
+          0.6555
+        ],
+        [
+          80,
+          0.6555
+        ],
+        [
+          90,
+          0.6582
+        ],
+        [
+          100,
+          0.6582
+        ],
+        [
+          110,
+          0.6582
+        ],
+        [
+          120,
+          0.6582
+        ]
+      ],
+      "retrained_val_accuracy": 0.695,
+      "retrained_test_accuracy": 0.6931,
+      "retrain_runs": [
+        {
+          "seed": 42,
+          "epochs_trained": 18,
+          "best_epoch": 15,
+          "val_accuracy": 0.6857,
+          "test_accuracy": 0.6887,
+          "test_loss": 0.9003
+        },
+        {
+          "seed": 43,
+          "epochs_trained": 25,
+          "best_epoch": 22,
+          "val_accuracy": 0.7094,
+          "test_accuracy": 0.7067,
+          "test_loss": 0.9277
+        },
+        {
+          "seed": 44,
+          "epochs_trained": 19,
+          "best_epoch": 16,
+          "val_accuracy": 0.69,
+          "test_accuracy": 0.6838,
+          "test_loss": 0.9357
+        }
+      ]
+    }
+  ]
+}

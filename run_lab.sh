@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Runs the whole lab end to end:
 #   find Python 3.10-3.13 -> .venv + pinned packages -> tests -> the lab (search, re-check, final comparison)
+#   -> the augmentation check
 #
-#   ./run_lab.sh              the full lab (about 10 minutes after the install)
-#   ./run_lab.sh --quick      a short version of everything (about 2 minutes after the install)
-#   ./run_lab.sh --compare    also compare the three search strategies (about 35 more minutes; with --quick, 1)
+#   ./run_lab.sh              the full lab (about 55 minutes after the install)
+#   ./run_lab.sh --quick      a short version of everything (about 3 minutes after the install)
+#   ./run_lab.sh --compare    also compare the three search strategies (about 3 more hours; with --quick, 2)
 #
 # Override the Python used to create .venv with PYTHON=/path/to/python3.12
 set -euo pipefail
@@ -58,6 +59,9 @@ step "Tests"
 
 step "The lab: search, re-check the top 5, compare with the baseline"
 .venv/bin/python -m tuning ${QUICK[@]+"${QUICK[@]}"}
+
+step "The augmentation check: the chosen configuration with augmentation off and on"
+.venv/bin/python -m tuning.augment ${QUICK[@]+"${QUICK[@]}"}
 
 if $COMPARE; then
     step "Search strategies at the same epoch budget"

@@ -1,7 +1,7 @@
 """Compare Keras Tuner's three search strategies on the same search space with the same budget of training epochs.
 
-    python -m tuning.compare              the full comparison (about 35 minutes on a laptop CPU)
-    python -m tuning.compare --quick      a quick check that everything runs (about 1 minute)
+    python -m tuning.compare              the full comparison (about 3 hours on a laptop CPU)
+    python -m tuning.compare --quick      a quick check that everything runs (about 2 minutes)
 
 For each search seed it runs Hyperband first and counts the epochs it actually trains. Random search and
 Bayesian optimization then get the same number of epochs: as many full-length trials as fit. Every
@@ -23,9 +23,9 @@ import keras
 import keras_tuner as kt
 from sklearn.exceptions import ConvergenceWarning
 
-from tuning.data import load_fashion_mnist, split_validation
-from tuning.lab import BASELINE, check_search, make_reproducible, require_tensorboard, train_and_evaluate
-from tuning.models import BASELINE_BATCH_SIZE, FashionHyperModel, build_baseline, describe
+from tuning.data import load_cifar10, split_validation
+from tuning.lab import check_search, make_reproducible, require_tensorboard, train_and_evaluate
+from tuning.models import BASELINE, BASELINE_BATCH_SIZE, CNNHyperModel, build_baseline, describe
 
 STRATEGIES = ["hyperband", "random", "bayesian"]  # Hyperband first: its epoch count sets the others' budget
 LABELS = {"hyperband": "Hyperband", "random": "Random search", "bayesian": "Bayesian optimization"}
@@ -40,7 +40,7 @@ DEFAULT_SEEDS = [42, 10042, 20042]
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
 
-class CountingHyperModel(FashionHyperModel):
+class CountingHyperModel(CNNHyperModel):
     """The lab's hypermodel, recording how many epochs each trial actually trains and its best validation accuracy.
 
     Keras Tuner stores only a trial's best epoch, and Hyperband trials resume from earlier ones, so the
@@ -172,7 +172,7 @@ def main(argv=None):
     require_tensorboard()
     run_dir = Path(args.runs_dir) / (datetime.now().strftime("%Y%m%d-%H%M%S") + "-compare")
     print(f"Run folder: {run_dir}")
-    (x_full, y_full), test = load_fashion_mnist()
+    (x_full, y_full), test = load_cifar10()
     train, val = split_validation(x_full, y_full)
 
     searches = []
@@ -185,7 +185,7 @@ def main(argv=None):
             print(f"\n==> {LABELS[strategy]}, search seed {seed}" + (f": {trials} trials" if trials else ""))
             tuner, best_hps, search = run_search(strategy, seed, args, train, val, run_dir / "searches", trials)
             budget = budget or search["epochs"]
-            search.update(retrain(lambda s: FashionHyperModel(seed=s).build(best_hps), best_hps.get("batch_size"),
+            search.update(retrain(lambda s: CNNHyperModel(seed=s).build(best_hps), best_hps.get("batch_size"),
                                   args, train, val, test, run_dir / "tensorboard" / f"{strategy}-seed{seed}"))
             print(f"  {search['trials']} trials, {search['epochs']} epochs, {search['seconds']}s. "
                   f"Search's best val_accuracy {search['search_best_val_accuracy']:.4f}; "
@@ -217,7 +217,7 @@ def main(argv=None):
     plot(searches, run_dir / "strategy_comparison.png")
 
     n = len(args.seeds)
-    print(f"\n==> Averages over {n} search seed{'s' * (n > 1)} (retrained with {len(args.retrain_seeds)} seeds each)")
+    print(f"\n==> Averages over {n} search seed{'s' * (n > 1)} (retrained with {len(args.retrain_seeds)} seed{'s' * (len(args.retrain_seeds) > 1)} each)")
     print(f"{'Strategy':22} {'trials':>6} {'epochs':>6} {'search best':>11} {'retrained val':>13} {'test':>7}")
     for strategy in STRATEGIES:
         s = summary[strategy]

@@ -1,1 +1,1 @@
-"""Hyperparameter tuning of a Fashion MNIST classifier with Keras Tuner."""
+"""Hyperparameter tuning of a CIFAR-10 image classifier (a small CNN) with Keras Tuner."""
